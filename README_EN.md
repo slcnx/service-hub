@@ -67,12 +67,28 @@ When a user tells their AI assistant: *"Start my crawler as a persistent local s
 
 While ServiceHub defaults to foreground execution for real-time terminal visibility, you can easily run it as a silent background daemon on macOS:
 
-### Option 1: Native macOS LaunchAgent (`launchd`) [Recommended]
+### Option 1: Native macOS LaunchAgent (`launchd`) with App Bundle Identity [Recommended]
 
-macOS uses `launchd` instead of systemd. Registering a LaunchAgent enables automatic startup on login and system-level crash recovery:
+macOS uses `launchd` (managed via `~/Library/LaunchAgents/`) as its native service supervision daemon for automatic startup upon login and crash recovery.
+
+#### 🛡️ Why Native App Bundle Identity Matters
+macOS Ventura, Sonoma, and Sequoia introduced strict **Background Task Management (BTM)** and privacy (TCC) frameworks:
+1. **Avoid Generic "bash / Unidentified Developer"**: If a LaunchAgent invokes a generic shell or script directly, macOS System Settings -> General -> Login Items & Extensions displays an unbranded `bash` entry with a warning: *"Item from unidentified developer"*.
+2. **Prevent TCC Permission Failures**: Background launchd processes executing scripts inside restricted folders (such as `~/Documents`) trigger `Operation not permitted` errors.
+
+#### 🚀 Automated Bundle Packaging & One-Click Setup
+ServiceHub provides an automated pipeline via `build_mac_app.py` and `scripts/install-launchagent.sh`:
+- Automatically packages `~/Applications/ServiceHub.app`
+- Generates dedicated retina AppIcon (`.icns`)
+- Embeds standard `Info.plist` with `CFBundleIdentifier = com.slcnx.servicehub` and bundle display metadata
+- Compiles a native Mach-O C launcher binary
+- Applies ad-hoc codesign and registers with LaunchServices
+- Connects `AssociatedBundleIdentifiers` in the LaunchAgent plist
+
+This allows macOS Background Task Management to properly display **ServiceHub** with its dedicated icon and trusted application identity.
 
 ```bash
-# 1. Register and start as LaunchAgent
+# 1. Automatically build app and install LaunchAgent
 ./scripts/install-launchagent.sh
 
 # 2. View background logs

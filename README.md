@@ -74,13 +74,28 @@ AI 会直接调用 `create_service(name="crawler", command="python spider.py", c
 
 虽然 ServiceHub 默认设计为在终端前台直观展示多色聚合日志，但当你需要它长期无感静默运行时，提供以下三种方案：
 
-### 方案 1：macOS 原生系统级方案 —— LaunchAgent (`launchd`) 【最推荐】
+### 方案 1：macOS 原生系统级方案 —— LaunchAgent (`launchd`) 与 App Bundle 身份封装 【最推荐】
 
-macOS 并没有 systemd，苹果官方的标准守护进程机制是 `launchd`。将服务放入 `~/Library/LaunchAgents/` 可以实现开机静默常驻自启与系统级崩溃保活。
+macOS 苹果官方的标准后台守护机制是 `launchd`（服务配置文件存放在 `~/Library/LaunchAgents/`），可实现开机静默常驻自启与系统级崩溃保活。
 
-本项目已经内置了一键注册脚本：
+#### 🛡️ 为什么需要原生 App Bundle 身份识别？
+在 macOS Ventura / Sonoma / Sequoia 中，系统引入了严格的**后台任务管理 (Background Task Management, BTM)** 与隐私权限管控（TCC）：
+1. **避免显示为「bash / 身份不明」**：若后台 plist 直接使用 `/bin/bash` 或普通脚本启动，系统设置的「通用 -> 登录项与扩展 -> 允许在后台」中会显示为一个通用的可执行图标，名称为 `bash`，并附带黄色的 *“项目来自身份不明的开发者”* 警告。
+2. **避免沙盒权限拦截**：若脚本位于受保护的个人目录（如 `~/Documents`），由 `launchd` 启动时极易触发 macOS TCC 权限拦截报错（`Operation not permitted`）。
+
+#### 🚀 自动化 App 封装与一键安装
+本项目内置了 `build_mac_app.py` 与自动化安装脚本：
+- 自动在 `~/Applications/` 编译构建原生 `ServiceHub.app` Bundle
+- 生成独立专属 AppIcon 高清图标 (`.icns`)
+- 配置标准 `Info.plist`（包含 Bundle Identifier `com.slcnx.servicehub`、显示名称与版权信息）
+- 编译原生 arm64/x86_64 Mach-O C 二进制启动器
+- 执行本地代码签名（Ad-hoc Codesign）并在 LaunchServices 中注册
+- 在 LaunchAgent plist 中关联 `<key>AssociatedBundleIdentifiers</key>`
+
+这使得 macOS 系统设置与后台任务管理面板能够以独立应用（**ServiceHub**）的名义识别并管理后台自启项！
+
 ```bash
-# 1. 一键安装并启动后台常驻 LaunchAgent
+# 1. 一键构建 App 并安装注册后台常驻 LaunchAgent
 ./scripts/install-launchagent.sh
 
 # 2. 查看后台运行日志
