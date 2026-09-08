@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  service-hub:
+    image: slcnx/service-hub:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: service-hub
+    restart: unless-stopped
+    ports:
+      - "9099:9099"
+    volumes:
+      # 持久化存储 ServiceHub 配置文件与轮转日志
+      - ~/.config/service-hub:/root/.config/service-hub
+      # 挂载待托管的工作代码目录 (可选，针对容器化服务)
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - SERVICEHUB_CONFIG_DIR=/root/.config/service-hub
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9099/api/services"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
