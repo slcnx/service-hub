@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ServiceHub Launcher for macOS
+PYTHON_EXEC="/opt/homebrew/Caskroom/miniconda/base/envs/jupy/bin/python"
+if [ ! -f "$PYTHON_EXEC" ]; then
+    PYTHON_EXEC="$(which python3)"
+fi
+
+# Resolve symlink to get true directory
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+
+exec "$PYTHON_EXEC" "$DIR/service_hub.py" "$@"
