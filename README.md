@@ -3,7 +3,7 @@
 # 🚀 ServiceHub
 
 **专为 macOS 本地开发环境设计的多服务前台管家**  
-*前台终端聚合多色日志 · 类似 systemd 守护保活 · 全功能 RESTful HTTP CRUD · 现代 Web 控制台 & OpenAPI Swagger*
+*前台终端聚合多色日志 · 类似 systemd 守护保活 · 全功能 RESTful HTTP CRUD · 现代 Web 控制台 & OpenAPI Swagger · AI 友好*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -29,8 +29,98 @@
 1. 🎨 **终端多色并流日志**：在当前终端前台聚合展示所有服务日志，独立分配色彩标签，直观清晰。
 2. 🛡️ **类 systemd 守护与隔离**：支持 `auto_restart` 崩溃自动拉起，使用 macOS 原生进程组（Process Group, `os.setsid` / `os.killpg`），确保退出与停止时干净彻底，不留孤儿进程。
 3. 🌐 **全功能 RESTful HTTP CRUD**：提供现代化的标准 JSON REST API，增删改查随时随地控制任意服务。
-4. 🖥️ **开箱即用 Web 仪表盘 & Swagger**：浏览器直连 `http://127.0.0.1:9099` 即可视化交互，同时提供 `/docs` 接口调试。
-5. 💾 **配置自动持久化**：所有服务配置自动落盘于 `~/.config/service-hub/services.json`，重启管家无缝拉起。
+4. 🤖 **AI Agent 极简接入与自愈闭环**：标准 OpenAPI 规范，AI 无需敲终端命令，直接通过 Tool / Function Call 即可动态注册新服务并读取报错日志实现自愈。
+5. 🖥️ **开箱即用 Web 仪表盘 & Swagger**：浏览器直连 `http://127.0.0.1:9099` 即可视化交互，同时提供 `/docs` 接口调试。
+6. 💾 **配置自动持久化**：所有服务配置自动落盘于 `~/.config/service-hub/services.json`，重启管家无缝拉起。
+
+---
+
+## 🤖 AI 如何在项目中轻松添加与管理新服务？
+
+ServiceHub 是**专门为 AI Agent / LLM 编排场景优化设计的**。传统工具（如 PM2 / systemd）要求 AI 生成复杂的 Shell 命令并解析非结构化的终端输出，极易发生转义错误或幻觉；而 ServiceHub 具备以下原生优势：
+
+### 1. 结构化 Function Calling / Tool Use
+ServiceHub 自带标准 OpenAPI JSON Schema (`http://127.0.0.1:9099/openapi.json`)。任何 AI Agent 框架（如 OpenAI GPT-4o、Claude 3.5 Sonnet、LangChain、AutoGen、Microsoft Agent Framework、Cursor 等）都可以直接将服务管理作为工具调用：
+
+```python
+# 给 AI Agent 定义的标准 Tool 示例 (Python)
+import httpx
+
+def create_service(name: str, command: str, cwd: str = None, auto_restart: bool = True):
+    """让 AI 在本地后台注册并运行一个新的常驻服务"""
+    resp = httpx.post("http://127.0.0.1:9099/api/services", json={
+        "name": name,
+        "command": command,
+        "cwd": cwd,
+        "auto_restart": auto_restart,
+        "autostart": True
+    })
+    return resp.json()
+```
+
+用户只需对 AI 说：
+> *“帮我把刚才写的爬虫脚本 `spider.py` 作为一个常驻后台服务跑起来，异常挂掉自动拉起”*
+
+AI 会直接调用 `create_service(name="crawler", command="python spider.py", cwd="/path/to/dir")`，完成服务注册与启动。
+
+### 2. 报错自愈闭环 (Self-Healing Feedback Loop)
+- **监控状态**：AI 通过 `GET /api/services/{name}` 探测运行状态。
+- **排查故障**：一旦服务变为 `crashed`，AI 直接调用 `GET /api/services/{name}/logs` 拉取最后几十行崩溃堆栈。
+- **自动修复**：AI 读懂堆栈后修改代码，并调用 `POST /api/services/{name}/restart` 一键热重启，形成完全闭环的自愈能力。
+
+---
+
+## 🍎 macOS 下如何将前台服务转移到后台常驻？
+
+虽然 ServiceHub 默认设计为在终端前台直观展示多色聚合日志，但当你需要它长期无感静默运行时，提供以下三种方案：
+
+### 方案 1：macOS 原生系统级方案 —— LaunchAgent (`launchd`) 【最推荐】
+
+macOS 并没有 systemd，苹果官方的标准守护进程机制是 `launchd`。将服务放入 `~/Library/LaunchAgents/` 可以实现开机静默常驻自启与系统级崩溃保活。
+
+本项目已经内置了一键注册脚本：
+```bash
+# 1. 一键安装并启动后台常驻 LaunchAgent
+./scripts/install-launchagent.sh
+
+# 2. 查看后台运行日志
+tail -f ~/.config/service-hub/logs/service-hub.log
+
+# 3. 停止后台服务
+launchctl unload ~/Library/LaunchAgents/com.slcnx.service-hub.plist
+
+# 4. 重新启动后台服务
+launchctl load -w ~/Library/LaunchAgents/com.slcnx.service-hub.plist
+
+# 5. 彻底卸载 LaunchAgent
+./scripts/install-launchagent.sh --uninstall
+```
+*在后台常驻运行期间，你仍然可以随时打开浏览器访问 `http://127.0.0.1:9099` 查看所有服务的 Web 控制台和实时流式日志！*
+
+---
+
+### 方案 2：开发者首选 —— `tmux` 会话后台保持 【随时切回前台看彩色日志】
+
+如果你既想让它后台常驻，又想在需要时随时回到终端看高亮彩色的实时滚屏日志，强烈推荐使用 `tmux`：
+
+```bash
+# 1. 后台新建会话并启动 ServiceHub
+tmux new -d -s service-hub "service-hub --port 9099"
+
+# 2. 随时切入终端前台查看全彩多色实时日志
+tmux attach -t service-hub
+
+# 3. 退出前台回到后台（不中断进程运行）：
+#    键盘依次按下：Ctrl + B，然后按 D (Detach)
+```
+
+---
+
+### 方案 3：轻量命令行后台 —— `nohup`
+
+```bash
+nohup service-hub --port 9099 > ~/.config/service-hub/logs/hub.log 2>&1 &
+```
 
 ---
 
@@ -56,18 +146,6 @@ service-hub
 ./service-hub --port 9099
 ```
 
-启动后终端将展示前台服务看板：
-```text
-=================================================================
-  🚀 ServiceHub - macOS Local Service & Process Manager
-  📡 HTTP REST API & Web UI: http://127.0.0.1:9099
-  📖 Swagger OpenAPI Docs:   http://127.0.0.1:9099/docs
-  📁 Config Path:            ~/.config/service-hub/services.json
-=================================================================
-[15:05:53 demo-worker   ] Worker pulse 0
-[15:05:54 discord-agent ] INFO: Uvicorn running on http://127.0.0.1:8088
-```
-
 ---
 
 ## 🖥️ 可视化 Web 控制台
@@ -88,7 +166,6 @@ service-hub
 
 ### 1. Create（注册并启动新服务）
 - **POST** `/api/services`
-- **Payload**:
 ```json
 {
   "name": "my-api",
